@@ -1,0 +1,307 @@
+import pandas as pd
+import numpy as np
+from bs4 import BeautifulSoup as soup
+from urllib.request import Request, urlopen
+import operator
+from collections import Counter
+
+
+def get_fundamentals():
+    try:
+        # Find fundamentals table
+        fundamentals = pd.read_html(str(html), attrs = {'class': 'snapshot-table2'})[0]
+        
+        # Clean up fundamentals dataframe
+        fundamentals.columns = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']
+        colOne = []
+        colLength = len(fundamentals)
+        for k in np.arange(0, colLength, 2):
+            colOne.append(fundamentals[f'{k}'])
+        attrs = pd.concat(colOne, ignore_index=True)
+    
+        colTwo = []
+        colLength = len(fundamentals)
+        for k in np.arange(1, colLength, 2):
+            colTwo.append(fundamentals[f'{k}'])
+        vals = pd.concat(colTwo, ignore_index=True)
+        
+        fundamentals = pd.DataFrame()
+        fundamentals['Attributes'] = attrs
+        fundamentals['Values'] = vals
+        fundamentals = fundamentals.set_index('Attributes')
+        return fundamentals
+
+    except Exception as e:
+        return e
+    
+def get_news():
+    try:
+        # Find news table
+        news = pd.read_html(str(html), attrs = {'class': 'fullview-news-outer'})[0]
+        links = []
+        for a in html.find_all('a', class_="tab-link-news"):
+            links.append(a['href'])
+        
+        # Clean up news dataframe
+        news.columns = ['Date', 'News Headline']
+        news['Article Link'] = links
+        news = news.set_index('Date')
+        return news
+
+    except Exception as e:
+        return e
+
+def get_insider():
+    try:
+        # Find insider table
+        insider = pd.read_html(str(html), attrs = {'class': 'body-table'})[0]
+        
+        # Clean up insider dataframe
+        insider = insider.iloc[1:]
+        insider.columns = ['Trader', 'Relationship', 'Date', 'Transaction', 'Cost', '# Shares', 'Value ($)', '# Shares Total', 'SEC Form 4']
+        insider = insider[['Date', 'Trader', 'Relationship', 'Transaction', 'Cost', '# Shares', 'Value ($)', '# Shares Total', 'SEC Form 4']]
+        insider = insider.set_index('Date')
+        return insider
+
+    except Exception as e:
+        return e
+
+pd.set_option('display.max_colwidth', 25)
+
+# Input
+'''symbol = input('Enter a tickers list: ')'''
+'''stock_list = ['AMZN','GOOG','PG','KO','IBM','DG','XOM','KO','PEP','MT','NL','BABA','TOMZ']'''
+stock_list = ['SAM','WVVI','STZ','BUD','DEO','TAP','MGPI','ABEV']
+metric = ['PEG',
+'Debt/Eq',
+'ROE',
+'P/B',
+'Cash/sh',
+'Current Ratio',
+'ROI',
+'Insider Own'
+]
+df = pd.DataFrame(index=stock_list,columns=metric)
+symbol = 'BABA'
+url = ("http://finviz.com/quote.ashx?t=" + symbol.lower())
+req = Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+webpage = urlopen(req).read()
+html = soup(webpage, "html.parser")
+key_metricS = get_fundamentals()
+key_metricS.rename({'Values':symbol},axis='columns')
+
+
+for symbol in df.index:
+    print ('Getting data for ' + symbol + '...\n')
+
+# Set up scraper
+    url = ("http://finviz.com/quote.ashx?t=" + symbol.lower())
+    req = Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    webpage = urlopen(req).read()
+    html = soup(webpage, "html.parser")
+    key_metric = get_fundamentals()
+    sLength = len(key_metricS['Values'])
+    key_metricS[symbol] = pd.Series(key_metric['Values'], index=key_metricS.index)
+
+key_metricS = key_metricS.drop(['Values'],axis=1)
+key_metricS = key_metricS.transpose()
+key_metricS = key_metricS.replace('-',0)
+key_metricS['PEG'] = key_metricS['PEG'].astype('float')
+key_metricS['Debt/Eq'] = key_metricS['Debt/Eq'].astype('float')
+key_metricS['P/B'] = key_metricS['P/B'].astype('float')
+key_metricS['Cash/sh'] = key_metricS['Cash/sh'].astype('float')
+key_metricS['Current Ratio'] = key_metricS['Current Ratio'].astype('float')
+key_metricS['ROE'] = key_metricS['ROE'].str.strip('%').astype('float') / 100.0
+key_metricS['ROI'] = key_metricS['ROI'].str.strip('%').astype('float') / 100.0
+key_metricS['Insider Own'] = key_metricS['Insider Own'].str.strip('%').astype('float') / 100.0
+'''cols = key_metricS.select_dtypes(exclude=['float']).columns
+key_metricS[cols] = pd.to_numeric(key_metricS[cols],errors='coerce')'''
+key_metricS.to_csv('ticker_metrics20.csv')
+
+index = 0
+
+
+
+'''PEG'''
+key_metricS1 = key_metricS[metric[index]]
+new_key_metricS1 = key_metricS1.to_dict()
+sorted_d_re = dict(sorted(new_key_metricS1.items(),key=operator.itemgetter(1),reverse=True))
+print('----------------')
+print("The rank score for PEG ratio: ")
+print(sorted_d_re)
+i = 1
+for k, v in sorted_d_re.items():
+    if v == '-':
+        sorted_d_re[k] = '0'
+    else:
+        sorted_d_re[k] = i
+    i += 1
+metric_peg = sorted_d_re
+print(metric_peg)
+index += 1
+
+
+'''Debt/Eq'''
+key_metricS1 = key_metricS[metric[index]]
+new_key_metricS1 = key_metricS1.to_dict()
+sorted_d_re = dict(sorted(new_key_metricS1.items(),key=operator.itemgetter(1),reverse=True))
+print('----------------')
+print("The rank score for Debt/Eq ratio: ")
+print(sorted_d_re)
+i = 2
+for k, v in sorted_d_re.items():
+    if v == '-':
+        sorted_d_re[k] = '0'
+    else:
+        sorted_d_re[k] = i
+    i += 2
+metric_debt_eq = sorted_d_re
+print(metric_debt_eq)
+index += 1
+
+'''ROE'''
+key_metricS1 = key_metricS[metric[index]]
+new_key_metricS1 = key_metricS1.to_dict()
+sorted_d = dict(sorted(new_key_metricS1.items(),key=operator.itemgetter(1)))
+print('----------------')
+print("The rank score for ROE ratio: ")
+print(sorted_d)
+i = 2
+for k, v in sorted_d.items():
+    if v == '-':
+        sorted_d[k] = '0'
+    else:
+        sorted_d[k] = i
+    i += 2
+metric_roe = sorted_d
+print(metric_roe)
+index += 1
+
+'''P/B'''
+key_metricS1 = key_metricS[metric[index]]
+new_key_metricS1 = key_metricS1.to_dict()
+sorted_d = dict(sorted(new_key_metricS1.items(),key=operator.itemgetter(1)))
+print('----------------')
+print("The rank score for P/B ratio: ")
+print(sorted_d)
+i = 1
+for k, v in sorted_d.items():
+    if v == '-':
+        sorted_d[k] = '0'
+    else:
+        sorted_d[k] = i
+    i += 1
+metric_debt_pb = sorted_d
+print(metric_debt_pb)
+index += 1
+
+'''Cash/Sh'''
+key_metricS1 = key_metricS[metric[index]]
+new_key_metricS1 = key_metricS1.to_dict()
+sorted_d = dict(sorted(new_key_metricS1.items(),key=operator.itemgetter(1)))
+print('----------------')
+print("The rank score for cash/sh ratio: ")
+print(sorted_d)
+i = 2
+for k, v in sorted_d.items():
+    if v == '-':
+        sorted_d[k] = '0'
+    else:
+        sorted_d[k] = i
+    i += 2
+metric_cash = sorted_d
+print(metric_cash)
+index += 1
+
+'''Current Ratio'''
+key_metricS1 = key_metricS[metric[index]]
+new_key_metricS1 = key_metricS1.to_dict()
+sorted_d = dict(sorted(new_key_metricS1.items(),key=operator.itemgetter(1)))
+print('----------------')
+print("The rank score for current ratio: ")
+print(sorted_d)
+i = 2
+for k, v in sorted_d.items():
+    if v == '-':
+        sorted_d[k] = '0'
+    else:
+        sorted_d[k] = i
+    i += 2
+metric_current = sorted_d
+print(metric_current)
+index += 1
+
+'''ROI'''
+key_metricS1 = key_metricS[metric[index]]
+new_key_metricS1 = key_metricS1.to_dict()
+sorted_d = dict(sorted(new_key_metricS1.items(),key=operator.itemgetter(1)))
+print('----------------')
+print("The rank score for ROI: ")
+print(sorted_d)
+i = 1
+for k, v in sorted_d.items():
+    if v == '-':
+        sorted_d[k] = '0'
+    else:
+        sorted_d[k] = i
+    i += 1
+metric_roi = sorted_d
+print(metric_roi)
+index += 1
+
+'''Insider Own'''
+key_metricS1 = key_metricS[metric[index]]
+new_key_metricS1 = key_metricS1.to_dict()
+sorted_d = dict(sorted(new_key_metricS1.items(),key=operator.itemgetter(1)))
+print('----------------')
+print("The rank score for insider own: ")
+print(sorted_d)
+i = 1
+for k, v in sorted_d.items():
+    if v == '-':
+        sorted_d[k] = '0'
+    else:
+        sorted_d[k] = i
+    i += 1
+metric_insider = sorted_d
+print(metric_insider)
+
+'''Calculating the toppest 3 tickers in the same industry based on scores gained 
+from those metrics'''
+
+metric_peg = dict((k,int(v)) for k,v in metric_peg.items())
+metric_debt_eq = dict((k,int(v)) for k,v in metric_debt_eq.items())
+metric_roe = dict((k,int(v)) for k,v in metric_roe.items())
+metric_debt_pb = dict((k,int(v)) for k,v in metric_debt_pb.items())
+metric_cash = dict((k,int(v)) for k,v in metric_cash.items())
+metric_current = dict((k,int(v)) for k,v in metric_current.items())
+metric_roi = dict((k,int(v)) for k,v in metric_roi.items())
+metric_insider = dict((k,int(v)) for k,v in metric_insider.items())
+final_metrics_scores = Counter(metric_peg) + Counter(metric_debt_eq) + Counter(metric_roe) + Counter(metric_debt_pb) + Counter(metric_cash) + Counter(metric_current) + Counter(metric_roi) + Counter(metric_insider)
+'''map1 = Counter(metric_peg)
+map2 = Counter(metric_debt_eq)
+final_metric_scores = map1 + map2'''
+print()
+print()
+print('*********************\n*********************\n*********************')
+print(str(final_metrics_scores))
+
+
+
+
+
+
+
+
+
+'''key_metricS1 = key_metricS[(key_metricS['P/B'].astype(float) < 3)]
+key_metricS1.to_csv('testone7.csv')
+print ('\nRecent News: ')
+news = get_news()
+news.to_csv('stock_news.csv')
+print(news.head(3))'''
+
+'''print ('\nRecent Insider Trades: ')
+insider = get_insider()
+print(insider.head(3))
+'''
